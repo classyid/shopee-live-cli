@@ -75,16 +75,35 @@ fetch_and_play() {
   
   # Fetch data dari API
   local json_data=$(curl -s "$url")
+  
+  # Debug: Tampilkan respons JSON untuk debugging
+  log_message "API Response: ${json_data:0:200}..." # Tampilkan 200 karakter pertama
+  
+  # Cek apakah respons valid
+  if ! echo "$json_data" | jq . >/dev/null 2>&1; then
+    log_error "Invalid JSON response"
+    log_message "Full response: $json_data"
+    return 1
+  fi
+  
   local err_code=$(echo "$json_data" | jq -r '.err_code')
   
-  if [[ "$err_code" -ne 0 ]]; then
-    local err_msg=$(echo "$json_data" | jq -r '.err_msg')
+  if [[ "$err_code" != "0" ]]; then
+    local err_msg=$(echo "$json_data" | jq -r '.err_msg // "Unknown error"')
     log_error "Error fetching data: $err_msg (error code: $err_code)"
     return 1
   fi
   
-  local play_url=$(echo "$json_data" | jq -r '.data.play_urls[0]')
-  local title=$(echo "$json_data" | jq -r '.data.session.title')
+  # Ekstrak URL streaming dan judul dengan penanganan error yang lebih baik
+  local play_url=$(echo "$json_data" | jq -r '.data.play_urls[0] // empty')
+  local title=$(echo "$json_data" | jq -r '.data.session.title // empty')
+  
+  # Cek apakah play_url berhasil diekstrak
+  if [[ -z "$play_url" ]]; then
+    log_error "Tidak dapat mengekstrak URL streaming dari respons API"
+    log_message "Struktur data mungkin telah berubah, cek path JSON"
+    return 1
+  fi
   
   log_message "Judul: $title"
   log_message "URL Stream: $play_url"
